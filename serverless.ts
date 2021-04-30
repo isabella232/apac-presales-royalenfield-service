@@ -2,7 +2,7 @@ import type { Serverless } from 'serverless/aws';
 
 const serverlessConfiguration: Serverless = {
   service: {
-    name: 'serverless-helloworld-ts',
+    name: 'royalenfield-service',
   },
   frameworkVersion: '2',
   custom: {
@@ -12,6 +12,11 @@ const serverlessConfiguration: Serverless = {
     },
     pseudoParameters: {
       allowReferences: false,
+    },
+    syncHistoryTbl: 'RoyalEnfield-SyncHistory-${self:provider.stage}',
+    provision: {
+      ReadCapacityUnits: 5,
+      WriteCapacityUnits: 2,
     },
     corsValue: {
       origin: '*',
@@ -33,12 +38,7 @@ const serverlessConfiguration: Serverless = {
     },
   },
   // Add the serverless-webpack plugin
-  plugins: [
-    'serverless-webpack',
-    'serverless-offline',
-    'serverless-prune-plugin',
-    'serverless-pseudo-parameters',
-  ],
+  plugins: ['serverless-webpack', 'serverless-offline', 'serverless-prune-plugin', 'serverless-pseudo-parameters'],
   provider: {
     name: 'aws',
     runtime: 'nodejs12.x',
@@ -49,20 +49,74 @@ const serverlessConfiguration: Serverless = {
     },
     environment: {
       AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
+      SYNC_HISTORY_TABLE: '${self:custom.syncHistoryTbl}'
     },
+    iamRoleStatements: [
+      {
+        Effect: 'Allow',
+        Action: [
+          'dynamodb:DescribeTable',
+          'dynamodb:Query',
+          'dynamodb:Scan',
+          'dynamodb:GetItem',
+          'dynamodb:PutItem',
+          'dynamodb:UpdateItem',
+          'dynamodb:DeleteItem',
+        ],
+        Resource: '*',
+      },
+    ],
   },
   functions: {
-    hello: {
-      handler: 'handler.hello',
+    generateTickets: {
+      handler: 'handlers/generateTickets.main',
       events: [
+        {
+          schedule: 'cron(0 * ? * * *)',
+        },
         {
           http: {
             method: 'get',
-            path: 'hello',
+            path: 'generate-tickets',
             cors: true,
           },
         },
       ],
+    },
+    resetDB: {
+      handler: 'handlers/resetDB.main',
+      events: [
+        {
+          http: {
+            method: 'get',
+            path: 'reset-db',
+            cors: true,
+          },
+        },
+      ],
+    },
+  },
+  resources: {
+    Resources: {
+      syncHistory: {
+        Type: 'AWS::DynamoDB::Table',
+        Properties: {
+          TableName: '${self:custom.syncHistoryTbl}',
+          AttributeDefinitions: [
+            {
+              AttributeName: 'ServiceId',
+              AttributeType: 'S',
+            },
+          ],
+          KeySchema: [
+            {
+              AttributeName: 'ServiceId',
+              KeyType: 'HASH',
+            },
+          ],
+          ProvisionedThroughput: '${self:custom.provision}',
+        },
+      },
     },
   },
 };
