@@ -51,15 +51,45 @@ const serverlessConfiguration: Serverless = {
       AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
       SYNC_HISTORY_TABLE: '${self:custom.syncHistoryTbl}'
     },
+    iamRoleStatements: [
+      {
+        Effect: 'Allow',
+        Action: [
+          'dynamodb:DescribeTable',
+          'dynamodb:Query',
+          'dynamodb:Scan',
+          'dynamodb:GetItem',
+          'dynamodb:PutItem',
+          'dynamodb:UpdateItem',
+          'dynamodb:DeleteItem',
+        ],
+        Resource: '*',
+      },
+    ],
   },
   functions: {
-    hello: {
-      handler: 'handler.hello',
+    generateTickets: {
+      handler: 'handlers/generateTickets.main',
+      events: [
+        {
+          schedule: 'cron(0 * ? * * *)',
+        },
+        {
+          http: {
+            method: 'get',
+            path: 'generate-tickets',
+            cors: true,
+          },
+        },
+      ],
+    },
+    resetDB: {
+      handler: 'handlers/resetDB.main',
       events: [
         {
           http: {
             method: 'get',
-            path: 'hello',
+            path: 'reset-db',
             cors: true,
           },
         },
@@ -68,19 +98,19 @@ const serverlessConfiguration: Serverless = {
   },
   resources: {
     Resources: {
-      botConfigs: {
+      syncHistory: {
         Type: 'AWS::DynamoDB::Table',
         Properties: {
           TableName: '${self:custom.syncHistoryTbl}',
           AttributeDefinitions: [
             {
-              AttributeName: 'CaseId',
+              AttributeName: 'ServiceId',
               AttributeType: 'S',
             },
           ],
           KeySchema: [
             {
-              AttributeName: 'CaseId',
+              AttributeName: 'ServiceId',
               KeyType: 'HASH',
             },
           ],
